@@ -1,6 +1,7 @@
 #include "Server.hpp"
 #include <cerrno>
 #include <cstdlib>
+#include <netinet/in.h>
 #include <sstream>
 #include <algorithm>
 
