@@ -140,9 +140,12 @@ void Server::processBuffer(int clientFd) {
     std::string &buffer = this->clientBuffers[clientFd];
     size_t pos;
 
-    while ((pos = buffer.find("\r\n")) != std::string::npos) {
+    while ((pos = buffer.find('\n')) != std::string::npos) {
         std::string line = buffer.substr(0, pos);
-        buffer.erase(0, pos + 2);
+        buffer.erase(0, pos + 1);
+
+        if (!line.empty() && line[line.size() - 1] == '\r')
+            line.erase(line.size() - 1);
 
         if (line.empty())
             continue;
@@ -472,6 +475,7 @@ void Server::handleJoin(int clientFd, const ParsedCommand &command) {
     for (size_t i = 0; i < channelNames.size(); ++i) {
         const std::string &channelName = channelNames[i];
         std::string key = (i < keys.size()) ? keys[i] : "";
+        bool newChannel = false;
 
         if (!isChannelNameValid(channelName)) {
             sendNumeric(clientFd, 403, channelName + " :No such channel");
@@ -486,10 +490,11 @@ void Server::handleJoin(int clientFd, const ParsedCommand &command) {
             channel.operators.insert(clientFd);
             channels[channelName] = channel;
             it = channels.find(channelName);
+            newChannel = true;
         }
 
         Channel &channel = it->second;
-        if (channel.members.find(clientFd) != channel.members.end())
+        if (!newChannel && channel.members.find(clientFd) != channel.members.end())
             continue;
 
         if (channel.inviteOnly && channel.invited.find(clientFd) == channel.invited.end()) {
