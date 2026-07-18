@@ -475,6 +475,7 @@ void Server::handleJoin(int clientFd, const ParsedCommand &command) {
     for (size_t i = 0; i < channelNames.size(); ++i) {
         const std::string &channelName = channelNames[i];
         std::string key = (i < keys.size()) ? keys[i] : "";
+        bool newChannel = false;
 
         if (!isChannelNameValid(channelName)) {
             sendNumeric(clientFd, 403, channelName + " :No such channel");
@@ -489,10 +490,11 @@ void Server::handleJoin(int clientFd, const ParsedCommand &command) {
             channel.operators.insert(clientFd);
             channels[channelName] = channel;
             it = channels.find(channelName);
+            newChannel = true;
         }
 
         Channel &channel = it->second;
-        if (channel.members.find(clientFd) != channel.members.end())
+        if (!newChannel && channel.members.find(clientFd) != channel.members.end())
             continue;
 
         if (channel.inviteOnly && channel.invited.find(clientFd) == channel.invited.end()) {
