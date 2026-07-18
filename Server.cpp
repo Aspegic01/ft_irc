@@ -140,9 +140,12 @@ void Server::processBuffer(int clientFd) {
     std::string &buffer = this->clientBuffers[clientFd];
     size_t pos;
 
-    while ((pos = buffer.find("\r\n")) != std::string::npos) {
+    while ((pos = buffer.find('\n')) != std::string::npos) {
         std::string line = buffer.substr(0, pos);
-        buffer.erase(0, pos + 2);
+        buffer.erase(0, pos + 1);
+
+        if (!line.empty() && line[line.size() - 1] == '\r')
+            line.erase(line.size() - 1);
 
         if (line.empty())
             continue;
