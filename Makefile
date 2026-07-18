@@ -1,5 +1,10 @@
 NAME = ircserv
-SRCS = main.cpp Server.cpp Client.cpp Command.cpp
+SRCS = main.cpp Server.cpp Client.cpp Command.cpp \
+	   ServerHandlePass.cpp ServerHandleNick.cpp ServerHandleUser.cpp \
+	   ServerHandlePing.cpp ServerHandlePong.cpp ServerHandleJoin.cpp \
+	   ServerHandlePart.cpp ServerHandlePrivmsg.cpp ServerHandleTopic.cpp \
+	   ServerHandleInvite.cpp ServerHandleKick.cpp ServerHandleMode.cpp \
+	   ServerHandleQuit.cpp ServerHandleCommand.cpp
 OBJS = $(SRCS:.cpp=.o)
 CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++98
