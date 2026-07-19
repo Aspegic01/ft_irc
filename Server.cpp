@@ -16,6 +16,16 @@ static std::vector<std::string> splitByComma(const std::string &value) {
             out.push_back(value.substr(start));
             break;
         }
+
+        static std::vector<std::string> splitByCommaNonEmpty(const std::string &value) {
+            std::vector<std::string> values = splitByComma(value);
+            std::vector<std::string> out;
+            for (size_t i = 0; i < values.size(); ++i) {
+                if (!values[i].empty())
+                    out.push_back(values[i]);
+            }
+            return out;
+        }
         out.push_back(value.substr(start, comma - start));
         start = comma + 1;
     }
@@ -637,10 +647,8 @@ void Server::handleInvite(int clientFd, const ParsedCommand &command) {
 
     std::string nick = command.params[0];
     std::string channelName = command.params[1];
-
-    std::map<std::string, int>::iterator nickIt = nickToFd.find(nick);
-    if (nickIt == nickToFd.end()) {
-        sendNumeric(clientFd, 401, nick + " :No such nick/channel");
+    if (!isChannelNameValid(channelName)) {
+        sendNumeric(clientFd, 403, channelName + " :No such channel");
         return;
     }
 
@@ -657,6 +665,12 @@ void Server::handleInvite(int clientFd, const ParsedCommand &command) {
     }
     if (channel.operators.find(clientFd) == channel.operators.end()) {
         sendNumeric(clientFd, 482, channelName + " :You're not channel operator");
+        return;
+    }
+
+    std::map<std::string, int>::iterator nickIt = nickToFd.find(nick);
+    if (nickIt == nickToFd.end()) {
+        sendNumeric(clientFd, 401, nick + " :No such nick/channel");
         return;
     }
     if (channel.members.find(nickIt->second) != channel.members.end()) {
@@ -675,35 +689,61 @@ void Server::handleKick(int clientFd, const ParsedCommand &command) {
         return;
     }
 
-    std::string channelName = command.params[0];
-    std::string nick = command.params[1];
+    std::vector<std::string> channelNames = splitByCommaNonEmpty(command.params[0]);
+    std::vector<std::string> nickNames = splitByCommaNonEmpty(command.params[1]);
     std::string reason = command.params.size() > 2 ? command.params[2] : clients[clientFd]->getNickname();
 
-    std::map<std::string, Channel>::iterator chIt = channels.find(channelName);
-    if (chIt == channels.end()) {
-        sendNumeric(clientFd, 403, channelName + " :No such channel");
+    if (channelNames.empty() || nickNames.empty()) {
+        sendNumeric(clientFd, 461, "KICK :Not enough parameters");
         return;
     }
 
-    Channel &channel = chIt->second;
-    if (channel.members.find(clientFd) == channel.members.end()) {
-        sendNumeric(clientFd, 442, channelName + " :You're not on that channel");
-        return;
-    }
-    if (channel.operators.find(clientFd) == channel.operators.end()) {
-        sendNumeric(clientFd, 482, channelName + " :You're not channel operator");
-        return;
-    }
+    for (size_t i = 0; i < channelNames.size(); ++i) {
+        const std::string &channelName = channelNames[i];
+        if (!isChannelNameValid(channelName)) {
+            sendNumeric(clientFd, 403, channelName + " :No such channel");
+            continue;
+        }
 
-    std::map<std::string, int>::iterator nickIt = nickToFd.find(nick);
-    if (nickIt == nickToFd.end() || channel.members.find(nickIt->second) == channel.members.end()) {
-        sendNumeric(clientFd, 441, nick + " " + channelName + " :They aren't on that channel");
-        return;
-    }
+        std::map<std::string, Channel>::iterator chIt = channels.find(channelName);
+        if (chIt == channels.end()) {
+            sendNumeric(clientFd, 403, channelName + " :No such channel");
+            continue;
+        }
 
-    std::string kickMsg = getClientPrefix(clientFd) + " KICK " + channelName + " " + nick + " :" + reason + "\r\n";
-    broadcastToChannel(channelName, kickMsg, -1);
-    removeClientFromChannel(nickIt->second, channelName, "", false);
+        Channel &channel = chIt->second;
+        if (channel.members.find(clientFd) == channel.members.end()) {
+            sendNumeric(clientFd, 442, channelName + " :You're not on that channel");
+            continue;
+        }
+        if (channel.operators.find(clientFd) == channel.operators.end()) {
+            sendNumeric(clientFd, 482, channelName + " :You're not channel operator");
+            continue;
+        }
+
+        std::vector<std::string> targets;
+        if (nickNames.size() == 1 || i >= nickNames.size())
+            targets.push_back(nickNames[0]);
+        else if (channelNames.size() == nickNames.size())
+            targets.push_back(nickNames[i]);
+        else if (channelNames.size() == 1)
+            targets = nickNames;
+        else
+            targets.push_back(nickNames[0]);
+
+        for (size_t j = 0; j < targets.size(); ++j) {
+            const std::string &nick = targets[j];
+            std::map<std::string, int>::iterator nickIt = nickToFd.find(nick);
+            if (nickIt == nickToFd.end() || channel.members.find(nickIt->second) == channel.members.end()) {
+                sendNumeric(clientFd, 441, nick + " " + channelName + " :They aren't on that channel");
+                continue;
+            }
+
+            std::string kickMsg = getClientPrefix(clientFd) + " KICK " + channelName + " " + nick + " :" + reason + "\r\n";
+            broadcastToChannel(channelName, kickMsg, -1);
+            removeClientFromChannel(nickIt->second, channelName, "", false);
+        }
+    }
 }
 
 std::string Server::channelModes(const Channel &channel) const {
